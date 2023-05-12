@@ -7,15 +7,15 @@ The idea is to have a simple way to trigger a long running process and then get 
 highway is a work in progress and is not ready for production.
 
 ## General Goal
-highway aims to be part of a larger overlay network that abstracts away the complexity of physical and virtual networks. 
 
-How's it work. 
+highway aims to be part of a larger overlay network that abstracts away the complexity of physical and virtual networks.
+
+How's it work.
 
 1. Tailscale/Wireguard on all physical nodes
 2. NAT with Jetstream as a central message broker
 3. highway as a WS and HTTP handler as broker to the NATS network
 4. highway as a worker that can be triggered by messages
-
 
 ## What does it do?
 
@@ -41,6 +41,8 @@ go run main.go
 
 ## Interacting with the `handler`
 
+#### Trigger a job
+
 ```bash
 curl --request POST \
   --url http://localhost:3000/trigger \
@@ -52,11 +54,16 @@ curl --request POST \
 # {"id":"c9ae7ca7-15ee-4fbe-a6b2-9782fe69e07a","text":"hello david","status":"Processing"}
 ```
 
-````bash
+#### Check the status of the job
+
+```bash
 curl --request GET \
   --url http://localhost:3000/done/dab6021c-f6ec-4ae1-b79c-231eedc0cdf1
 
 # {"id":"dab6021c-f6ec-4ae1-b79c-231eedc0cdf1","text":"hello david","status":"Done"}
+```
+
+#### Via Websocket
 
 ```bash
 websocat ws://127.0.0.1:3000/ws/0 -v
@@ -67,4 +74,4 @@ websocat ws://127.0.0.1:3000/ws/0 -v
 # {"text":"what color is the sky?"}
 # {"id":"f17d8221-d9e3-40ec-ad87-ca55b244e589","status":"started"}
 # {"id":"f17d8221-d9e3-40ec-ad87-ca55b244e589","text":"what color is the sky?","status":"Done"}
-````
+```
