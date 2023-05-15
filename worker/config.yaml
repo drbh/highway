@@ -1,0 +1,4 @@
+nats_url: "yama:4222"
+http_url: "http://localhost:8000/message"
+sub_channel: "cli.demo"
+pub_channel: "cli.done"

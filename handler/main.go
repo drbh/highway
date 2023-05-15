@@ -13,10 +13,11 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// Text   string `json:"text"`
 type Message struct {
-	ID     string `json:"id,omitempty"`
-	Text   string `json:"text"`
-	Status string `json:"status,omitempty"`
+	ID     string      `json:"id,omitempty"`
+	Msg    interface{} `json:"msg"`
+	Status string      `json:"status,omitempty"`
 }
 
 var nc *nats.Conn

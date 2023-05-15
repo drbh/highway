@@ -2,26 +2,50 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"io/ioutil"
 	"log"
-	"time"
+	"net/http"
+	"strings"
 
 	"github.com/nats-io/nats.go"
+	"gopkg.in/yaml.v2"
 )
 
+type Config struct {
+	NatsURL    string `yaml:"nats_url"`
+	HTTPURL    string `yaml:"http_url"`
+	SubChannel string `yaml:"sub_channel"`
+	PubChannel string `yaml:"pub_channel"`
+}
+
 type Message struct {
-	ID     string `json:"id"`
-	Text   string `json:"text"`
-	Status string `json:"status"`
+	ID     string      `json:"id"`
+	Msg    interface{} `json:"msg"`
+	Status string      `json:"status"`
+}
+
+type ChatRequest struct {
+	ChatID  int    `json:"chat_id"`
+	Message string `json:"message"`
+}
+
+type ChatResponse struct {
+	Messages []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+		ChatID  int    `json:"chat_id"`
+	} `json:"messages"`
 }
 
 var nc *nats.Conn
 var js nats.JetStreamContext
+var cfg Config
 
 func main() {
+	cfg = getConfig()
+
 	var err error
-	nc, err = nats.Connect("yama:4222")
-	// nc, err = nats.Connect(nats.DefaultURL)
+	nc, err = nats.Connect(cfg.NatsURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,31 +57,63 @@ func main() {
 
 	go processMessages()
 
-	// Keep the service running
 	select {}
 }
 
+func getConfig() Config {
+	data, err := ioutil.ReadFile("config.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var c Config
+	err = yaml.Unmarshal(data, &c)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return c
+}
+
 func processMessages() {
-	sub, _ := nc.Subscribe("cli.demo", func(m *nats.Msg) {
+	sub, _ := nc.Subscribe(cfg.SubChannel, func(m *nats.Msg) {
 		msg := new(Message)
 		json.Unmarshal(m.Data, msg)
 
-		randomIntBelow10 := time.Now().Unix() % 10
+		req := ChatRequest{
+			ChatID:  int(msg.Msg.(map[string]interface{})["chat_id"].(float64)),
+			Message: msg.Msg.(map[string]interface{})["message"].(string),
+		}
 
-		fmt.Printf("Processing message: %s\n", msg.Text)
-		fmt.Printf("Sleeping for %d seconds\n", randomIntBelow10)
-
-		// sleep that many seconds
-		time.Sleep(time.Duration(randomIntBelow10) * time.Second)
-
-		fmt.Printf("Done processing message: %s\n", msg.Text)
+		resp := request(req)
 
 		msg.Status = "Done"
+		msg.Msg = resp
+
 		msgBytes, _ := json.Marshal(msg)
 
-		js.Publish("cli.done", msgBytes)
+		js.Publish(cfg.PubChannel, msgBytes)
 	})
 
-	// Make sure messages are processed in order
 	sub.SetPendingLimits(-1, -1)
+}
+
+func request(request ChatRequest) ChatResponse {
+	requestBytes, _ := json.Marshal(request)
+
+	payload := strings.NewReader(string(requestBytes))
+
+	req, _ := http.NewRequest("POST", cfg.HTTPURL, payload)
+
+	req.Header.Add("Content-Type", "application/json")
+
+	res, _ := http.DefaultClient.Do(req)
+
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+
+	var chatResponse ChatResponse
+	json.Unmarshal(body, &chatResponse)
+
+	return chatResponse
 }
